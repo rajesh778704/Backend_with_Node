@@ -1,8 +1,24 @@
 import {asyncHandeler} from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js"
-import { User, Userser } from "../models/user.model.js";
+import { User} from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/fileUpload.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+
+const generateAccessAndRefreshToken=async(userId)=>{
+    try {
+            const user= await User.findById(userId);
+            const accessToken= user.generateAccessToken();
+            const refreshToken=user.generateRefreshToken();
+
+            user.refreshToken=refreshToken;
+            await user.save({ValidateBeforeSave : false})
+
+            return {accessToken, refreshToken}
+
+    } catch (error) {
+        throw new ApiError(500,"Error happen while creating Access & Refresh Token");
+    }
+}
 
 const registerUser= asyncHandeler( async(req, res)=>{
 
@@ -32,49 +48,106 @@ const registerUser= asyncHandeler( async(req, res)=>{
 
     //4. check image present or not
     const avtarLocalPath=req.files?.avtar[0]?.path;
-    const coverImageLocalPath= req.files?.coverImage[0]?.path;
+    let coverImageLocalPath;
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path
+    }
 
     if(!avtarLocalPath){
-        throw new ApiError(400,"Avtar File is Required.");  
+        throw new ApiError(400,"Avtar File is Required. 1");  
     }
 
      //5. upload on cloudnary
+     console.log(avtarLocalPath);
+     console.log(avtarLocalPath);
      const avtar = await uploadOnCloudinary(avtarLocalPath);
      const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
      if(!avtar){
-        throw new ApiError(400,"Avtar File is Required.");  
+        throw new ApiError(400,"Avtar File is Required. 2");  
      }
 
       //6. create user object
 
-     const user= await User.create({
-            fullName,
-            avtar:avtar.url,
-            coverImage:coverImage?.url || "",
-            email,
-            password,
-            username : username.toLowerCase()
-      })
-
-       //7. remove password and refresh token from response
-    const createdUser= User.findById(user._id).select(
+      const user = await User.create({
+        fullName,
+        avtar: avtar.url,
+        coverImage: coverImage?.url || "",
+        email, 
+        password,
+        username: username.toLowerCase()
+    })
+    //7. remove password and refresh token field from response
+    const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
+    //8.  check for user creation
+    if (!createdUser) {
+        throw new ApiError(500, "Something went wrong while registering the user")
+    }
+    //9. Return user response
+    return res.status(201).json(
+        new ApiResponse(200, createdUser, "User registered Successfully")
+    )
 
-    //8.check user creation
-    if(!createdUser){
-        throw new ApiError(500,"Something went wrong at the time of userCreation");
+   
+})
+
+const loginUser= asyncHandeler( async(req,res)=>{
+    //data from plyload
+    //username or email
+    //find user
+    //password check
+    //access and refresh token
+    //send cookie
+
+    const { email, username, password}= req.body;
+
+    if(!(username || email)){
+        throw new ApiError(400,"Username or email id is reqired");
     }
 
-    //9. give response
+   const user= await User.findOne({
+        $or:[{username},{email}]
+    })
 
-    return res.status(201).json(
-        new ApiResponse(200,createdUser,"User Created Susseccfully")
+    if(!user){
+        throw new ApiError(400,"User not exist");
+    }
+
+    const isPasswordValid= await user.isPasswordCorrect(password);
+
+    if(!isPasswordValid){
+        throw new ApiError(400,"Invalid Password");
+    }
+
+    const {accessToken, refreshToken}= await generateAccessAndRefreshToken(user._id);
+
+    const loggedInUser = await User.findById(user._id).select
+    ("-password -refreshToken")
+
+    const options={
+        httpOnly:true,
+        secure:true
+    }
+
+    return res
+    .status(200)
+    .cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",refreshToken,options)
+    .json(
+       new ApiResponse(
+        200,
+        {
+            user:loggedInUser, accessToken, refreshToken
+        },
+        "User Logged in successfully"
+       )
     )
-   
+
+
 })
 
 
 
-export {registerUser, postUser}
+export {registerUser , loginUser }
