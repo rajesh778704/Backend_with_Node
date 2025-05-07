@@ -178,6 +178,42 @@ const logoutUser = asyncHandeler(async(req,res)=>{
 
 })
 
+const changePassword= asyncHandeler(async(req,res)=>{
+    const {oldPassword , newPassword} = req.body;
+
+    const user= await User.findById(req.user?._id);
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if(!isPasswordCorrect){
+        throw new ApiError(401,"Incorrect Old Password")
+    }
+
+    user.password=newPassword;
+    await user.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(201,{}, "Password changed successfully")
+    )
 
 
-export {registerUser , loginUser , logoutUser }
+})
+
+const getCurrentUser= asyncHandeler( async(req,res)=>{
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(201,req.user,"User fetched successfully ")
+    )
+})
+
+
+
+    export {
+                registerUser , 
+                loginUser , 
+                logoutUser,
+                changePassword,
+                getCurrentUser 
+           }
