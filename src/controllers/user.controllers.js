@@ -208,6 +208,28 @@ const getCurrentUser= asyncHandeler( async(req,res)=>{
     )
 })
 
+const changeEmail = asyncHandeler(async(req,res)=>{
+    const { email } = req.body;
+
+    if(!email){
+        throw new ApiError(401,"Eamil id is required");
+    }
+   const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set:{
+                email
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res
+           .status(200)
+           .json(
+              new ApiResponse(200,user,"Email id changed successfully")
+           )
+}) 
+
 
 
     export {
@@ -215,5 +237,6 @@ const getCurrentUser= asyncHandeler( async(req,res)=>{
                 loginUser , 
                 logoutUser,
                 changePassword,
-                getCurrentUser 
+                getCurrentUser,
+                changeEmail
            }
