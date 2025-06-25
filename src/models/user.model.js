@@ -33,6 +33,10 @@ const userSchema= new Schema({
             ref:"video"
         }
     ],
+    role:{
+        type:String,
+        require:true
+    },
     avtar:{
         type:String,
         require:true

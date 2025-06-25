@@ -23,11 +23,11 @@ const generateAccessAndRefreshToken=async(userId)=>{
 const registerUser= asyncHandeler( async(req, res)=>{
 
     //1. get user details from frontend
-     const{ username , email , fullName , password}=req.body;
-    
+     const{ username , email , fullName , password, role}=req.body;
+    console.log(req.body)
     //2. validation mandatory filed
      if(
-        [username, email,fullName,password].some((field)=>{
+        [username, email,fullName,password, role].some((field)=>{
              return field?.trim()===""
         }
     )
@@ -75,8 +75,10 @@ const registerUser= asyncHandeler( async(req, res)=>{
         coverImage: coverImage?.url || "",
         email, 
         password,
-        username: username.toLowerCase()
+        username: username.toLowerCase(),
+        role: role
     })
+    console.log(user)
     //7. remove password and refresh token field from response
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
@@ -102,7 +104,6 @@ const loginUser= asyncHandeler( async(req,res)=>{
     //send cookie
 
     const { email, username, password}= req.body;
-
     if(!(username || email)){
         throw new ApiError(400,"Username or email id is reqired");
     }
@@ -230,6 +231,68 @@ const changeEmail = asyncHandeler(async(req,res)=>{
            )
 }) 
 
+const adminPannel= asyncHandeler(async(req,res)=>{
+
+    const user= await User.findById(req.user?._id)
+    const role=user.role.toLowerCase();
+    if(role != 'admin'){
+        throw new ApiError(401,"Only Admin can Access this page...")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(201,{},"Welcome to the Admin Pannel.")
+    )
+
+})
+
+const searchUser = asyncHandeler(async(req,res)=>{
+    let  {name='', page=1, limit=10}  = req.query;
+
+    const user= await User.findById(req.user?._id);
+
+    if(user.role.toLowerCase() != 'admin'){
+        throw new ApiError(401,"Only Admin can Access this page...")
+    }
+
+      if (!name || !(name = name.trim())) {
+       throw new ApiError(400, "Name is required to search user");
+     }
+
+     const skip= (parseInt(page)-1)*(parseInt(limit));
+
+    const userDetails= await User.aggregate([
+        {
+            $match:{
+                 fullName: { $regex: new RegExp(name, 'i') }
+            }
+        },
+        {
+            $project:{
+                _id:0,
+                fullName:1,
+                email:1,
+                username:1,
+                role:1
+            }
+        },
+        {$skip:skip},
+        {$limit:parseInt(limit)}
+    ])
+
+    if(userDetails.length === 0 ){
+        throw new ApiError(404,"No User Found with")
+    }
+    console.log(userDetails)
+    return res
+    .status(202)
+    .json(
+        new ApiResponse (202,userDetails,"User Details Fetch successfully")
+    )
+
+}) 
+
 
 
     export {
@@ -238,5 +301,7 @@ const changeEmail = asyncHandeler(async(req,res)=>{
                 logoutUser,
                 changePassword,
                 getCurrentUser,
-                changeEmail
+                changeEmail,
+                adminPannel,
+                searchUser
            }
